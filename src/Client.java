@@ -1,6 +1,7 @@
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PrintStream;
 import java.io.UnsupportedEncodingException;
 import java.math.BigInteger;
 import java.net.Socket;
@@ -9,6 +10,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Scanner;
 
 public class Client {
 	private static final char[] HEX_CHARS = "0123456789ABCDEF".toCharArray();
@@ -215,8 +217,16 @@ public class Client {
 				finalPacket += "6B ";
 			}
 		}
-		
-		System.out.println("final packet: "+finalPacket.toUpperCase());
+
+		System.out.println("final packet: " + finalPacket.toUpperCase());
+
+		PrintStream request = new PrintStream(client.getOutputStream());
+		request.println(finalPacket.toUpperCase());
+
+		Scanner inputServidor = new Scanner(in);
+		while (inputServidor.hasNextLine()) {
+			System.out.println("resposta: " + inputServidor.nextLine());
+		}
 	}
 
 	public static String stringToHex(String input) throws UnsupportedEncodingException {
