@@ -11,13 +11,31 @@ import java.util.Map;
 import java.util.Objects;
 
 public class Client {
-	private static final char[] HEX_CHARS = "0123456789abcdef".toCharArray();
+	private static final char[] HEX_CHARS = "0123456789ABCDEF".toCharArray();
 
 	public static void main(String[] args) throws UnknownHostException, IOException {
 		String host = "189.85.81.90";
 		int port = 50021;
-
 		Socket client = new Socket(host, port);
+
+		HashMap<String, String> inOutTable = new HashMap<String, String>();
+		inOutTable.put("0000", "11110");
+		inOutTable.put("0001", "01001");
+		inOutTable.put("0010", "10100");
+		inOutTable.put("0011", "10101");
+		inOutTable.put("0100", "01010");
+		inOutTable.put("0101", "01011");
+		inOutTable.put("0110", "01110");
+		inOutTable.put("0111", "01111");
+		inOutTable.put("1000", "10010");
+		inOutTable.put("1001", "10011");
+		inOutTable.put("1010", "10110");
+		inOutTable.put("1011", "10111");
+		inOutTable.put("1100", "11010");
+		inOutTable.put("1101", "11011");
+		inOutTable.put("1110", "11100");
+		inOutTable.put("1111", "11101");
+
 		System.out.println("Connection established!");
 
 		InputStream in = client.getInputStream();
@@ -81,24 +99,6 @@ public class Client {
 
 			System.out.println(fiveBitBlocks);
 
-			HashMap<String, String> inOutTable = new HashMap<String, String>();
-			inOutTable.put("0000", "11110");
-			inOutTable.put("0001", "01001");
-			inOutTable.put("0010", "10100");
-			inOutTable.put("0011", "10101");
-			inOutTable.put("0100", "01010");
-			inOutTable.put("0101", "01011");
-			inOutTable.put("0110", "01110");
-			inOutTable.put("0111", "01111");
-			inOutTable.put("1000", "10010");
-			inOutTable.put("1001", "10011");
-			inOutTable.put("1010", "10110");
-			inOutTable.put("1011", "10111");
-			inOutTable.put("1100", "11010");
-			inOutTable.put("1101", "11011");
-			inOutTable.put("1110", "11100");
-			inOutTable.put("1111", "11101");
-
 			String[] blocks = fiveBitBlocks.split(" ");
 			String decodedBits = "";
 			for (int i = 0; i < blocks.length; i++) {
@@ -151,6 +151,7 @@ public class Client {
 			}
 		}
 
+		ArrayList<String> packetsToSend = new ArrayList<String>();
 		System.out.println("invertedHexadecimalPackets: ");
 		for (String hexPack : invertedHexadecimalPackets) {
 			System.out.println(hexPack);
@@ -166,12 +167,56 @@ public class Client {
 					binaryBlock = "0" + binaryBlock;
 				}
 
-				packet += binaryBlock + " ";
+				packet += binaryBlock;
 			}
 			binaryPackets.add(packet);
-			System.out.println(packet);
-		}
 
+			for (String binary : binaryPackets) {
+				String fourBitBlocks = "";
+				for (int i = 0; i < binary.length(); i++) {
+					if ((i + 1) % 4 != 0) {
+						fourBitBlocks += binary.charAt(i);
+					} else {
+						fourBitBlocks += binary.charAt(i) + " ";
+					}
+				}
+				System.out.println(fourBitBlocks);
+				String[] blocks = fourBitBlocks.split(" ");
+				String codedBits = "";
+				for (int i = 0; i < blocks.length; i++) {
+					codedBits += inOutTable.get(blocks[i]);
+				}
+
+				String eightBitsPacket = "";
+				for (int i = 0; i < codedBits.length(); i++) {
+					if (i % 8 == 0 && i != 0) {
+						eightBitsPacket += " ";
+					}
+					eightBitsPacket += codedBits.charAt(i);
+				}
+				System.out.println(eightBitsPacket);
+
+				blocks = eightBitsPacket.split(" ");
+				packet = "";
+				for (String block : blocks) {
+					packet += binToHex(block) + " ";
+				}
+				packetsToSend.add(packet);
+				System.out.println(packet);
+			}
+		}
+		String finalPacket = "";
+		for (int i = 0; i < packetsToSend.size(); i++) {
+			finalPacket += "C6 " + packetsToSend.get(i);
+
+			if ((i + 1) == packetsToSend.size()) {
+				finalPacket += "21";
+			} else {
+				finalPacket += "6B ";
+			}
+		}
+		
+		System.out.println("final packet: "+finalPacket.toUpperCase());
 	}
 
 	public static String stringToHex(String input) throws UnsupportedEncodingException {
