@@ -23,115 +23,133 @@ public class Client {
 
 	public static void main(String[] args) throws UnknownHostException, IOException {
 		Socket client = new Socket(HOST, PORT);
-		PrintStream request = new PrintStream(client.getOutputStream());
-
+		PrintStream out = new PrintStream(client.getOutputStream());
+		InputStream in = client.getInputStream();
 		HashMap<String, String> inOutTable = new HashMap<String, String>();
+
 		initBinaryHashMap(inOutTable);
 
 		System.out.println("Connection established!");
 
-		InputStream in = client.getInputStream();
-
 		while (true) {
 			String hexadecimalMessage = receiveHexadecimalMessage(in);
-
+			
 			if (hexadecimalMessage.equalsIgnoreCase(OK)) {
 				System.out.println("Server response: OK");
 				break;
 			} else if (hexadecimalMessage.equalsIgnoreCase(ERR)) {
 				System.out.println("Server response: ERR");
 				break;
-			} else if(hexadecimalMessage.equalsIgnoreCase("")) {
+			} else if (hexadecimalMessage.equalsIgnoreCase("")) {
 				System.out.println("Nothing received from the server as return!");
 				break;
 			} else {
 				String[] hexadecimalBlocks = hexadecimalMessage.split(" ");
 				ArrayList<String> binaryPackets = new ArrayList<String>();
-				
+
 				String packet = hexPacketToBinary(hexadecimalBlocks, binaryPackets);
-				
+
 				System.out.println("Hexadecimal message: " + hexadecimalMessage);
 
 				String decodedMessage = decodeMessage(inOutTable, binaryPackets);
-
+				
 				System.out.println("Decoded message: " + decodedMessage);
 
 				String invertedMessage = invertMessage(decodedMessage);
 
 				String invertedHexMessage = stringToHex(invertedMessage);
-				
+
 				ArrayList<String> invertedHexadecimalPackets = new ArrayList<String>();
-				String buffer = "";
-				for (int i = 0; i < invertedHexMessage.length(); i++) {
-					buffer += invertedHexMessage.charAt(i);
-					if ((i + 1) % 2 == 0) {
-						buffer += " ";
-					}
-					if ((i + 1) % 8 == 0) {
-						invertedHexadecimalPackets.add(buffer);
-						buffer = "";
-					}
-				}
 
-				ArrayList<String> packetsToSend = new ArrayList<String>();
-				for (String hexPack : invertedHexadecimalPackets) {
-					binaryPackets = new ArrayList<String>();
-					packet = "";
-					String[] hexBlocks = hexPack.split(" ");
+				String finalPacket =  encodeMessage(inOutTable, invertedHexMessage, invertedHexadecimalPackets);
 
-					for (String block : hexBlocks) {
-						String binaryBlock = hexToBin(block);
+				System.out.println("final packet: " + finalPacket);
 
-						int addZeros = 8 - binaryBlock.length();
-						for (int i = 0; i < addZeros; i++) {
-							binaryBlock = "0" + binaryBlock;
-						}
-
-						packet += binaryBlock;
-					}
-					binaryPackets.add(packet);
-
-					for (String binary : binaryPackets) {
-						String fourBitBlocks = dividePacketInBlocks(binary, 4);
-						String[] blocks = fourBitBlocks.split(" ");
-						String codedBits = "";
-
-						for (int i = 0; i < blocks.length; i++) {
-							codedBits += inOutTable.get(blocks[i]);
-						}
-
-						String eightBitsPacket = "";
-						for (int i = 0; i < codedBits.length(); i++) {
-							if (i % 8 == 0 && i != 0) {
-								eightBitsPacket += " ";
-							}
-							eightBitsPacket += codedBits.charAt(i);
-						}
-
-						blocks = eightBitsPacket.split(" ");
-						packet = "";
-						for (String block : blocks) {
-							packet += binToHex(block) + " ";
-						}
-						packetsToSend.add(packet);
-					}
-				}
-				String finalPacket = "";
-				for (int i = 0; i < packetsToSend.size(); i++) {
-					finalPacket += "C6 " + packetsToSend.get(i);
-
-					if ((i + 1) == packetsToSend.size()) {
-						finalPacket += END_TRANSMISSION;
-					} else {
-						finalPacket += "6B ";
-					}
-				}
-
-				System.out.println("final packet: " + finalPacket.toUpperCase());
-
-				request.println(finalPacket.toUpperCase());
+				out.println(finalPacket);
 			}
 		}
+	}
+
+	private static String encodeMessage(HashMap<String, String> inOutTable, String invertedHexMessage,
+			ArrayList<String> invertedHexadecimalPackets) {
+		ArrayList<String> binaryPackets;
+		String packet;
+		String finalPacket = "";
+		String eightBitBlocks = "";
+
+		// Transform message into 8 bit block packets
+		for (int i = 0; i < invertedHexMessage.length(); i++) {
+			eightBitBlocks += invertedHexMessage.charAt(i);
+			if ((i + 1) % 2 == 0) {
+				eightBitBlocks += " ";
+			}
+			if ((i + 1) % 8 == 0) {
+				invertedHexadecimalPackets.add(eightBitBlocks);
+				eightBitBlocks = "";
+			}
+		}
+
+		ArrayList<String> packetsToSend = new ArrayList<String>();
+		for (String hexPack : invertedHexadecimalPackets) {
+			binaryPackets = new ArrayList<String>();
+			packet = "";
+			String[] hexBlocks = hexPack.split(" ");
+
+			// Add zeros to the left, if necessary, on the eight bit blocks
+			for (String block : hexBlocks) {
+				String binaryBlock = hexToBin(block);
+
+				int addZeros = 8 - binaryBlock.length();
+				for (int i = 0; i < addZeros; i++) {
+					binaryBlock = "0" + binaryBlock;
+				}
+
+				packet += binaryBlock;
+			}
+
+			binaryPackets.add(packet);
+
+			for (String binary : binaryPackets) {
+				String fourBitBlocks = dividePacketInBlocks(binary, 4);
+				String[] blocks = fourBitBlocks.split(" ");
+				String codedBits = "";
+
+				// Transform bits using the table
+				for (int i = 0; i < blocks.length; i++) {
+					codedBits += inOutTable.get(blocks[i]);
+				}
+
+				// Divide message into 1 byte (8 bits) blocks
+				String eightBitsPacket = "";
+				for (int i = 0; i < codedBits.length(); i++) {
+					if (i % 8 == 0 && i != 0) {
+						eightBitsPacket += " ";
+					}
+					eightBitsPacket += codedBits.charAt(i);
+				}
+				blocks = eightBitsPacket.split(" ");
+
+				// Transform bytes in hexadecimal blocks
+				packet = "";
+				for (String block : blocks) {
+					packet += binToHex(block) + " ";
+				}
+				packetsToSend.add(packet);
+			}
+		}
+
+		// Insert flags on the packet
+		for (int i = 0; i < packetsToSend.size(); i++) {
+			finalPacket += "C6 " + packetsToSend.get(i);
+
+			if ((i + 1) == packetsToSend.size()) {
+				finalPacket += END_TRANSMISSION;
+			} else {
+				finalPacket += "6B ";
+			}
+		}
+		
+		return finalPacket.toUpperCase();
 	}
 
 	private static String invertMessage(String decodedMessage) {
@@ -145,7 +163,7 @@ public class Client {
 
 	private static String decodeMessage(HashMap<String, String> inOutTable, ArrayList<String> binaryPackets) {
 		String decodedMessage = "";
-		
+
 		// group in 5 bit blocks
 		for (String binary : binaryPackets) {
 			String fiveBitBlocks = dividePacketInBlocks(binary, 5);
@@ -160,8 +178,8 @@ public class Client {
 					decodedBits += getKeyByValue(inOutTable, blocks[i]);
 				}
 			}
-			
-			//transform 8 bit blocks into a hexadecimal String
+
+			// transform 8 bit blocks into a hexadecimal String
 			String[] decodedParts = decodedBits.split(" ");
 			String hexadecimalString = "";
 			for (int i = 0; i < decodedParts.length; i++) {
@@ -171,13 +189,13 @@ public class Client {
 				hexadecimalString += Long.toHexString(Long.parseLong(decodedParts[i], 2)) + " ";
 			}
 
-			//decode the message
+			// decode the message
 			String[] hexadecimalParts = hexadecimalString.split(" ");
 			for (String part : hexadecimalParts) {
 				decodedMessage += hexToAscii(part);
 			}
 		}
-		
+
 		return decodedMessage;
 	}
 
@@ -195,7 +213,7 @@ public class Client {
 
 	private static String hexPacketToBinary(String[] hexadecimalBlocks, ArrayList<String> binaryPackets) {
 		String packet = "";
-		
+
 		for (String block : hexadecimalBlocks) {
 			if (block.equalsIgnoreCase(START_PKT)) {
 				// Nothing to do
